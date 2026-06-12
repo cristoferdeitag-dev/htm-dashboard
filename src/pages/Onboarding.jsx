@@ -71,6 +71,7 @@ export default function Onboarding() {
       }
       sessionStorage.setItem('htm_diag', JSON.stringify(data))
       sessionStorage.setItem('htm_email', email)
+      sessionStorage.setItem('htm_form', JSON.stringify(formData))
       navigate('/diagnostico')
     } catch (e) {
       alert('Error de conexión. Intenta de nuevo en un momento.')

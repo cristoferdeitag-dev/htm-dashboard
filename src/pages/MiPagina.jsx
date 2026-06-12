@@ -1,374 +1,151 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
+
+// Mi Página — generates and shows the user's REAL hosted site (/n/<slug>),
+// with live visit + WhatsApp-click counters. The old mockup is gone.
 
 export default function MiPagina() {
+  const navigate = useNavigate()
+  const email = sessionStorage.getItem('htm_email') || ''
+  const form = (() => {
+    try { return JSON.parse(sessionStorage.getItem('htm_form') || 'null') } catch { return null }
+  })()
+
+  const [site, setSite] = useState(null) // { slug, visits, wa_clicks }
+  const [generating, setGenerating] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
-  const url = 'minegocio.haztumarketing.com'
+
+  const fullUrl = site ? `${window.location.origin}/n/${site.slug}` : ''
+
+  const loadStats = useCallback(async () => {
+    if (!email) { setLoading(false); return }
+    try {
+      const res = await fetch(`/api/site/stats?email=${encodeURIComponent(email)}`)
+      const data = await res.json()
+      if (data.exists) setSite(data)
+    } catch { /* offline */ }
+    setLoading(false)
+  }, [email])
+
+  useEffect(() => { loadStats() }, [loadStats])
+
+  const generate = async () => {
+    if (!form || !email) {
+      alert('Primero completa el diagnóstico para que conozcamos tu negocio.')
+      navigate('/onboarding')
+      return
+    }
+    setGenerating(true)
+    try {
+      const res = await fetch('/api/site/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, email }),
+      })
+      const data = await res.json()
+      if (!res.ok) { alert(data.error || 'No pudimos crear tu página.'); setGenerating(false); return }
+      await loadStats()
+    } catch {
+      alert('Error de conexión. Intenta de nuevo.')
+    }
+    setGenerating(false)
+  }
 
   const copyUrl = () => {
-    navigator.clipboard.writeText(`https://${url}`)
+    navigator.clipboard.writeText(fullUrl)
     setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    setTimeout(() => setCopied(false), 1800)
+  }
+
+  if (loading) {
+    return <div style={styles.container}><p style={{ textAlign: 'center', color: '#666' }}>Cargando…</p></div>
+  }
+
+  if (!site) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.wrapper}>
+          <div style={styles.genCard}>
+            <span style={{ fontSize: 52 }}>🚀</span>
+            <h2 style={styles.title}>Tu página web, lista en un minuto</h2>
+            <p style={styles.sub}>
+              Con lo que nos contaste de tu negocio, la IA escribe los textos y arma una página
+              profesional con botón de WhatsApp — hospedada por nosotros, gratis.
+            </p>
+            <button style={styles.bigBtn} onClick={generate} disabled={generating}>
+              {generating ? 'Creando tu página… (≈20 seg)' : 'Crear mi página ahora ✨'}
+            </button>
+            {!form && (
+              <p style={{ fontSize: 13, color: '#888', marginTop: 12 }}>
+                Tip: primero haz tu diagnóstico para que conozcamos tu negocio.
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
     <div style={styles.container}>
       <div style={styles.wrapper}>
-        {/* Header */}
-        <div style={styles.header}>
-          <h1 style={styles.title}>Tu Pagina Web</h1>
-          <p style={styles.subtitle}>Administra y personaliza tu sitio web de negocio</p>
-        </div>
+        <h2 style={styles.title}>Mi Página</h2>
 
-        {/* URL Bar */}
+        {/* URL bar */}
         <div style={styles.urlBar}>
-          <div style={styles.urlLeft}>
-            <span style={styles.urlIcon}>🔗</span>
-            <span style={styles.urlText}>{url}</span>
-          </div>
-          <button style={styles.copyBtn} onClick={copyUrl}>
-            {copied ? '✅ Copiado!' : '📋 Copiar'}
-          </button>
+          <span style={styles.urlText}>{fullUrl}</span>
+          <button style={styles.smallBtn} onClick={copyUrl}>{copied ? '¡Copiada! ✅' : 'Copiar'}</button>
+          <a style={{ ...styles.smallBtn, textDecoration: 'none' }} href={fullUrl} target="_blank" rel="noreferrer">Abrir ↗</a>
         </div>
 
         {/* Stats */}
         <div style={styles.statsRow}>
           <div style={styles.statCard}>
-            <span style={styles.statIcon}>👁️</span>
-            <span style={styles.statNum}>0</span>
+            <span style={styles.statNum}>{site.visits ?? 0}</span>
             <span style={styles.statLabel}>Visitas</span>
           </div>
           <div style={styles.statCard}>
-            <span style={styles.statIcon}>💬</span>
-            <span style={styles.statNum}>0</span>
-            <span style={styles.statLabel}>Clics en WhatsApp</span>
+            <span style={{ ...styles.statNum, color: '#25D366' }}>{site.wa_clicks ?? 0}</span>
+            <span style={styles.statLabel}>Clics a WhatsApp</span>
           </div>
-          <div style={styles.statCard}>
-            <span style={styles.statIcon}>📅</span>
-            <span style={styles.statNum}>Hoy</span>
-            <span style={styles.statLabel}>Desde</span>
-          </div>
+          <button style={{ ...styles.smallBtn, alignSelf: 'center' }} onClick={loadStats}>Actualizar ↻</button>
         </div>
 
-        {/* Preview */}
-        <div style={styles.previewSection}>
-          <h2 style={styles.sectionTitle}>Vista previa</h2>
-          <div style={styles.previewFrame}>
-            <div style={styles.browserBar}>
-              <div style={styles.browserDots}>
-                <span style={{ ...styles.dot, background: '#ff5f57' }} />
-                <span style={{ ...styles.dot, background: '#febc2e' }} />
-                <span style={{ ...styles.dot, background: '#28c840' }} />
-              </div>
-              <div style={styles.browserUrlBar}>
-                <span style={styles.browserLock}>🔒</span>
-                {url}
-              </div>
-            </div>
-            <div style={styles.previewContent}>
-              <div style={styles.loadingContainer}>
-                <div style={styles.generatingSpinner}>
-                  <div style={styles.spinnerRing} />
-                </div>
-                <h3 style={styles.loadingTitle}>Tu pagina esta siendo generada...</h3>
-                <p style={styles.loadingText}>
-                  Estamos creando un sitio web profesional basado en la informacion de tu negocio.
-                </p>
-                <div style={styles.loadingSteps}>
-                  <div style={styles.loadingStep}>
-                    <span style={styles.stepCheck}>✅</span>
-                    <span>Estructura del sitio</span>
-                  </div>
-                  <div style={styles.loadingStep}>
-                    <span style={styles.stepCheck}>✅</span>
-                    <span>Textos optimizados para SEO</span>
-                  </div>
-                  <div style={{ ...styles.loadingStep, ...styles.loadingStepActive }}>
-                    <span style={styles.stepSpinner}>⏳</span>
-                    <span>Diseño visual y colores</span>
-                  </div>
-                  <div style={{ ...styles.loadingStep, opacity: 0.4 }}>
-                    <span>⬜</span>
-                    <span>Boton de WhatsApp</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+        {/* Live preview */}
+        <div style={styles.previewFrame}>
+          <div style={styles.previewBar}>
+            <span style={styles.dot} /><span style={styles.dot} /><span style={styles.dot} />
+            <span style={{ fontSize: 12, color: '#888', marginLeft: 8 }}>{fullUrl}</span>
           </div>
+          <iframe title="preview" src={`/n/${site.slug}`} style={styles.iframe} />
         </div>
 
-        {/* Actions */}
-        <div style={styles.actions}>
-          <button style={styles.editBtn}>
-            ✏️ Editar Pagina
-          </button>
-          <button style={styles.publishBtn} disabled>
-            🚀 Publicar Cambios
-          </button>
-        </div>
-
-        {/* Tips */}
-        <div style={styles.tipsCard}>
-          <span style={styles.tipsIcon}>💡</span>
-          <div>
-            <h3 style={styles.tipsTitle}>Consejo</h3>
-            <p style={styles.tipsText}>
-              Una pagina web con fotos reales de tu negocio genera 3 veces mas confianza que una con fotos de stock. Sube tus propias fotos cuando tu pagina este lista!
-            </p>
-          </div>
-        </div>
+        <p style={{ fontSize: 13, color: '#777', marginTop: 14, textAlign: 'center' }}>
+          ¿Quieres cambiar textos, colores o tener tu propio dominio (tunegocio.com)?
+          Eso viene con el programa de 9 meses. 😉
+        </p>
       </div>
     </div>
   )
 }
 
 const styles = {
-  container: {
-    padding: '32px 28px',
-    maxWidth: 800,
-    margin: '0 auto',
-  },
-  wrapper: {},
-  header: {
-    marginBottom: 24,
-  },
-  title: {
-    fontFamily: "'Plus Jakarta Sans', sans-serif",
-    fontSize: 28,
-    fontWeight: 800,
-    color: '#191c1e',
-    marginBottom: 4,
-  },
-  subtitle: {
-    color: '#434654',
-    fontSize: 15,
-  },
-  urlBar: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    background: '#fff',
-    borderRadius: 14,
-    padding: '12px 16px',
-    boxShadow: '0 2px 12px rgba(0, 0, 0, 0.04)',
-    marginBottom: 20,
-  },
-  urlLeft: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-  },
-  urlIcon: {
-    fontSize: 18,
-  },
-  urlText: {
-    fontSize: 14,
-    fontWeight: 600,
-    color: '#0c56d0',
-  },
-  copyBtn: {
-    padding: '8px 16px',
-    borderRadius: 10,
-    background: '#f0f3ff',
-    color: '#003d9b',
-    fontSize: 13,
-    fontWeight: 600,
-    border: 'none',
-    transition: 'all 0.2s ease',
-  },
-  statsRow: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
-    gap: 12,
-    marginBottom: 28,
-  },
-  statCard: {
-    background: '#fff',
-    borderRadius: 16,
-    padding: '18px 16px',
-    textAlign: 'center',
-    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: 4,
-  },
-  statIcon: {
-    fontSize: 22,
-  },
-  statNum: {
-    fontFamily: "'Plus Jakarta Sans', sans-serif",
-    fontSize: 22,
-    fontWeight: 800,
-    color: '#191c1e',
-  },
-  statLabel: {
-    fontSize: 11,
-    color: '#434654',
-    fontWeight: 500,
-  },
-  previewSection: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontFamily: "'Plus Jakarta Sans', sans-serif",
-    fontSize: 18,
-    fontWeight: 700,
-    color: '#191c1e',
-    marginBottom: 14,
-  },
-  previewFrame: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    border: '1px solid #edeef0',
-    boxShadow: '0 4px 24px rgba(0, 0, 0, 0.06)',
-  },
-  browserBar: {
-    background: '#f8f9fb',
-    padding: '10px 14px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-    borderBottom: '1px solid #edeef0',
-  },
-  browserDots: {
-    display: 'flex',
-    gap: 5,
-  },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: '50%',
-    display: 'inline-block',
-  },
-  browserUrlBar: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 12,
-    color: '#434654',
-    background: '#fff',
-    padding: '5px 12px',
-    borderRadius: 8,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  browserLock: {
-    fontSize: 10,
-  },
-  previewContent: {
-    background: '#fff',
-    padding: '48px 24px',
-    minHeight: 320,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingContainer: {
-    textAlign: 'center',
-    maxWidth: 360,
-  },
-  generatingSpinner: {
-    width: 56,
-    height: 56,
-    margin: '0 auto 20px',
-    position: 'relative',
-  },
-  spinnerRing: {
-    width: 56,
-    height: 56,
-    border: '4px solid #edeef0',
-    borderTopColor: '#003d9b',
-    borderRadius: '50%',
-    animation: 'spin 1s linear infinite',
-  },
-  loadingTitle: {
-    fontFamily: "'Plus Jakarta Sans', sans-serif",
-    fontSize: 18,
-    fontWeight: 700,
-    color: '#191c1e',
-    marginBottom: 8,
-  },
-  loadingText: {
-    fontSize: 13,
-    color: '#434654',
-    marginBottom: 24,
-    lineHeight: 1.5,
-  },
-  loadingSteps: {
-    textAlign: 'left',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 10,
-  },
-  loadingStep: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-    fontSize: 13,
-    color: '#434654',
-  },
-  loadingStepActive: {
-    color: '#003d9b',
-    fontWeight: 600,
-  },
-  stepCheck: {
-    fontSize: 14,
-  },
-  stepSpinner: {
-    fontSize: 14,
-    animation: 'pulse 1.5s ease-in-out infinite',
-  },
-  actions: {
-    display: 'flex',
-    gap: 12,
-    marginBottom: 24,
-  },
-  editBtn: {
-    flex: 1,
-    padding: '14px 20px',
-    borderRadius: 14,
-    background: '#003d9b',
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: 700,
-    border: 'none',
-    transition: 'all 0.2s ease',
-  },
-  publishBtn: {
-    flex: 1,
-    padding: '14px 20px',
-    borderRadius: 14,
-    background: '#edeef0',
-    color: '#9e9e9e',
-    fontSize: 15,
-    fontWeight: 700,
-    border: 'none',
-    cursor: 'not-allowed',
-    opacity: 0.7,
-  },
-  tipsCard: {
-    display: 'flex',
-    gap: 14,
-    background: '#fffde7',
-    borderRadius: 16,
-    padding: '18px 20px',
-    border: '1px solid #fff9c4',
-  },
-  tipsIcon: {
-    fontSize: 24,
-    flexShrink: 0,
-  },
-  tipsTitle: {
-    fontFamily: "'Plus Jakarta Sans', sans-serif",
-    fontSize: 14,
-    fontWeight: 700,
-    color: '#191c1e',
-    marginBottom: 4,
-  },
-  tipsText: {
-    fontSize: 13,
-    color: '#434654',
-    lineHeight: 1.5,
-  },
+  container: { minHeight: '100vh', background: '#f8f9fb', padding: '32px 16px' },
+  wrapper: { maxWidth: 920, margin: '0 auto' },
+  title: { fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 26, color: '#1a1a1a', marginBottom: 16 },
+  sub: { color: '#555', fontSize: 15, maxWidth: 480, margin: '10px auto 22px' },
+  genCard: { background: '#fff', borderRadius: 18, padding: '48px 28px', textAlign: 'center', boxShadow: '0 2px 14px rgba(0,0,0,.06)', marginTop: 40 },
+  bigBtn: { background: '#003d9b', color: '#fff', border: 'none', borderRadius: 999, padding: '15px 34px', fontSize: 16, fontWeight: 700, cursor: 'pointer' },
+  urlBar: { display: 'flex', alignItems: 'center', gap: 10, background: '#fff', borderRadius: 12, padding: '12px 16px', boxShadow: '0 2px 8px rgba(0,0,0,.05)', marginBottom: 16, flexWrap: 'wrap' },
+  urlText: { flex: 1, fontWeight: 600, color: '#003d9b', fontSize: 14, wordBreak: 'break-all' },
+  smallBtn: { background: '#eaf0fb', color: '#003d9b', border: 'none', borderRadius: 8, padding: '8px 14px', fontWeight: 700, fontSize: 13, cursor: 'pointer' },
+  statsRow: { display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' },
+  statCard: { background: '#fff', borderRadius: 12, padding: '14px 22px', boxShadow: '0 2px 8px rgba(0,0,0,.05)', display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 120 },
+  statNum: { fontSize: 26, fontWeight: 800, color: '#003d9b' },
+  statLabel: { fontSize: 12, color: '#777', fontWeight: 600 },
+  previewFrame: { background: '#fff', borderRadius: 14, overflow: 'hidden', boxShadow: '0 4px 18px rgba(0,0,0,.08)' },
+  previewBar: { display: 'flex', alignItems: 'center', gap: 5, padding: '10px 14px', borderBottom: '1px solid #eee', background: '#fafafa' },
+  dot: { width: 10, height: 10, borderRadius: '50%', background: '#ddd', display: 'inline-block' },
+  iframe: { width: '100%', height: 560, border: 'none', display: 'block' },
 }
