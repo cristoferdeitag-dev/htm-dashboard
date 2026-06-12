@@ -1,57 +1,36 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-const diagnosticData = {
-  total: 35,
-  message: 'Tu presencia digital necesita trabajo. Pero estamos aqui para ayudarte!',
-  categories: [
-    {
-      icon: '🌐',
-      label: 'Pagina Web',
-      status: 'bad',
-      statusIcon: '❌',
-      statusText: 'No tienes pagina web',
-      score: 0,
-      maxScore: 25,
-    },
-    {
-      icon: '📱',
-      label: 'Redes Sociales',
-      status: 'warning',
-      statusIcon: '⚠️',
-      statusText: 'Tienes Instagram pero sin estrategia',
-      score: 10,
-      maxScore: 25,
-    },
-    {
-      icon: '🗺️',
-      label: 'Google',
-      status: 'bad',
-      statusIcon: '❌',
-      statusText: 'Tu negocio no aparece en Google Maps',
-      score: 0,
-      maxScore: 25,
-    },
-    {
-      icon: '💬',
-      label: 'WhatsApp',
-      status: 'good',
-      statusIcon: '✅',
-      statusText: 'Tienes WhatsApp Business',
-      score: 25,
-      maxScore: 25,
-    },
-  ],
-}
-
 const statusColors = {
   bad: '#ba1a1a',
   warning: '#ff9800',
   good: '#00c853',
 }
 
+const ICONS = { web: '🌐', google: '🗺️', social: '📱', whatsapp: '💬' }
+
+function enrich(result) {
+  const categories = (result.categories || []).map((c) => {
+    const ratio = c.score / (c.maxScore || 25)
+    const status = ratio >= 0.7 ? 'good' : ratio >= 0.3 ? 'warning' : 'bad'
+    const statusText = status === 'good' ? 'Vas muy bien aquí' : status === 'warning' ? 'Hay oportunidad de mejora' : 'Aquí está tu mayor hueco'
+    return { ...c, icon: ICONS[c.key] || '📊', status, statusIcon: status === 'good' ? '✅' : status === 'warning' ? '⚠️' : '❌', statusText }
+  })
+  return {
+    total: result.score || 0,
+    message: result.headline || 'Esto encontramos sobre tu presencia digital.',
+    categories,
+    recommendations: result.topRecommendations || [],
+  }
+}
+
 export default function Diagnostico() {
   const navigate = useNavigate()
+  const stored = (() => {
+    try { return JSON.parse(sessionStorage.getItem('htm_diag') || 'null') } catch { return null }
+  })()
+  const diagnosticData = stored ? enrich(stored) : { total: 0, message: '', categories: [], recommendations: [] }
+  useEffect(() => { if (!stored) navigate('/onboarding') }, [])
   const [animatedScore, setAnimatedScore] = useState(0)
   const [showCards, setShowCards] = useState(false)
 
@@ -152,6 +131,44 @@ export default function Diagnostico() {
             </div>
           ))}
         </div>
+
+        {/* Top recommendations */}
+        {diagnosticData.recommendations.length > 0 && (
+          <div style={styles.cardsSection}>
+            <h3 style={styles.sectionTitle}>Tus 3 movimientos con más impacto</h3>
+            {diagnosticData.recommendations.map((r, i) => (
+              <div key={i} style={{ ...styles.card, borderLeftColor: '#003d9b' }}>
+                <div style={styles.cardHeader}>
+                  <div style={styles.cardLeft}>
+                    <span style={styles.cardIcon}>{['🥇', '🥈', '🥉'][i] || '⭐'}</span>
+                    <div>
+                      <div style={styles.cardLabel}>{r.title}</div>
+                      <div style={{ fontSize: 13, color: '#555', marginTop: 4 }}>{r.why}</div>
+                    </div>
+                  </div>
+                  <div style={styles.cardScore}>
+                    <span style={{ ...styles.cardScoreNum, color: '#00c853', fontSize: 18 }}>{r.impact}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+            <button
+              style={{ ...styles.ctaButton, width: '100%', marginTop: 12, background: '#003d9b' }}
+              onClick={async () => {
+                try {
+                  await fetch('/api/interested', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: sessionStorage.getItem('htm_email') || '' }),
+                  })
+                } catch (e) { /* best effort */ }
+                alert('¡Listo! Te contactamos muy pronto para arrancar tu programa gratis. 🎉')
+              }}
+            >
+              Quiero inscribirme gratis al programa →
+            </button>
+          </div>
+        )}
 
         {/* CTA */}
         <div style={styles.ctaSection}>

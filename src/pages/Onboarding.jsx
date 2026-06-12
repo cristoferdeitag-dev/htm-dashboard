@@ -34,6 +34,7 @@ export default function Onboarding() {
     whatsapp: '',
     selectedGoals: [],
     timeAvailable: '',
+    email: '',
   })
 
   const update = (field, value) => {
@@ -49,11 +50,32 @@ export default function Onboarding() {
     }))
   }
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
+    const email = (formData.email || '').trim()
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      alert('Escribe tu correo para recibir tu diagnóstico.')
+      return
+    }
     setIsAnalyzing(true)
-    setTimeout(() => {
+    try {
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        alert(data.error || 'No pudimos analizar tu negocio. Intenta de nuevo.')
+        setIsAnalyzing(false)
+        return
+      }
+      sessionStorage.setItem('htm_diag', JSON.stringify(data))
+      sessionStorage.setItem('htm_email', email)
       navigate('/diagnostico')
-    }, 3000)
+    } catch (e) {
+      alert('Error de conexión. Intenta de nuevo en un momento.')
+      setIsAnalyzing(false)
+    }
   }
 
   if (isAnalyzing) {
@@ -298,6 +320,20 @@ export default function Onboarding() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              <div style={styles.field}>
+                <label style={styles.label}>Tu correo electrónico *</label>
+                <input
+                  style={styles.input}
+                  type="email"
+                  placeholder="tu@correo.com"
+                  value={formData.email}
+                  onChange={(e) => update('email', e.target.value)}
+                />
+                <span style={{ fontSize: 12, color: '#888' }}>
+                  Aquí te mandamos tu diagnóstico. Sin spam, prometido.
+                </span>
               </div>
             </div>
           )}
